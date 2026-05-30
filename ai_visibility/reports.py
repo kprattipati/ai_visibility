@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import Counter
 from datetime import date
 
 from ai_visibility.data import City, PracticeArea
@@ -20,8 +19,8 @@ def build_markdown_report(
         raise ValueError(f"Target business was not included in benchmark: {target_business}")
 
     top = scores[0] if scores else target
-    reason_counts = Counter(reason for score in scores[:5] for reason in score.reasons)
-    missing_signals = _missing_signal_recommendations(area, target, top)
+    rank = scores.index(target) + 1
+    total_firms = len(scores)
 
     lines = [
         f"# AI Visibility Audit: {target_business}",
@@ -33,8 +32,10 @@ def build_markdown_report(
         "",
         "## Executive Summary",
         "",
-        f"{target_business} scored **{target.visibility_score(total_prompts)}/100** for AI recommendation visibility in this market.",
-        f"The leading benchmark firm scored **{top.visibility_score(total_prompts)}/100**.",
+        f"{target_business} ranked **#{rank} of {total_firms}** firms tested, "
+        f"scoring **{target.visibility_score(total_prompts)}/100** for AI recommendation visibility.",
+        f"The leading firm scored **{top.visibility_score(total_prompts)}/100** "
+        f"and appeared in the top 3 results on **{top.top_three_mentions}/{total_prompts}** prompts.",
         "",
         "## Leaderboard",
         "",
@@ -42,10 +43,10 @@ def build_markdown_report(
         "|---:|---|---:|---:|---:|---:|",
     ]
 
-    for rank, score in enumerate(scores, start=1):
+    for r, score in enumerate(scores, start=1):
         lines.append(
             "| {rank} | {business} | {score} | {mentions} | {recommendations} | {top_three} |".format(
-                rank=rank,
+                rank=r,
                 business=score.business.name,
                 score=score.visibility_score(total_prompts),
                 mentions=score.mentions,
@@ -54,56 +55,66 @@ def build_markdown_report(
             )
         )
 
-    lines.extend(
-        [
-            "",
-            "## Why Competitors Are Being Recommended",
-            "",
-        ]
-    )
-    if reason_counts:
-        for reason, count in reason_counts.most_common(5):
-            lines.append(f"- {reason} ({count} observed mentions)")
-    else:
-        lines.append("- No recommendation reasons were extracted.")
-
-    lines.extend(
-        [
-            "",
-            "## Priority Actions",
-            "",
-        ]
-    )
-    for action in missing_signals:
+    lines.extend(["", "## Priority Actions", ""])
+    for action in _priority_actions(area, target, top, rank, total_firms, total_prompts):
         lines.append(f"- {action}")
-
-    lines.extend(
-        [
-            "",
-            "## Sample Prompts",
-            "",
-        ]
-    )
-    for answer in answers[:5]:
-        lines.append(f"- {answer.prompt}")
 
     return "\n".join(lines) + "\n"
 
 
-def _missing_signal_recommendations(
+def _priority_actions(
     area: PracticeArea,
     target: BusinessScore,
     top: BusinessScore,
+    rank: int,
+    total_firms: int,
+    total_prompts: int,
 ) -> list[str]:
-    actions = [
-        f"Build or strengthen pages that explicitly cover: {', '.join(area.customer_language[:4])}.",
-        "Make attorney credentials, consultation process, and location served easy for AI systems to verify.",
-        "Improve third-party evidence on legal directories and authoritative local sources.",
-        "Ask satisfied clients for specific review language tied to the actual practice area, where ethically permitted.",
-        "Add structured data for LegalService, LocalBusiness, reviews, attorneys, and service areas.",
-    ]
-    if target.mentions < top.mentions:
-        actions.insert(0, "Close the recommendation gap by matching the evidence patterns visible on top competitor profiles.")
+    actions: list[str] = []
+    score = target.visibility_score(total_prompts)
+    top_score = top.visibility_score(total_prompts)
+    gap = round(top_score - score, 1)
+
+    if score == 0:
+        actions.append(
+            "Your firm did not appear in any AI recommendation results tested. "
+            "The most likely cause is low authority signals — AI systems cannot confidently surface firms "
+            "without visible credentials, reviews, or directory presence."
+        )
+        actions.append(
+            f"Priority: establish a clear, indexable presence for {', '.join(area.customer_language[:3])} "
+            "before competitors widen this gap further."
+        )
+    elif rank == 1:
+        actions.append(
+            f"Your firm leads this market with a {score}/100 score. "
+            "Focus on maintaining top-3 placement consistency across prompt types."
+        )
+    else:
+        actions.append(
+            f"You are {gap} points behind the market leader (#{1}) and ranked #{rank} of {total_firms}. "
+            "The gap is driven primarily by top-3 placement frequency — you are being mentioned but not ranked first."
+        )
+
+    if target.top_three_mentions < top.top_three_mentions:
+        top3_gap = top.top_three_mentions - target.top_three_mentions
+        actions.append(
+            f"Top-3 placement gap: the leading firm appeared in the top 3 on {top.top_three_mentions}/{total_prompts} prompts; "
+            f"you appeared on {target.top_three_mentions}/{total_prompts}. "
+            "Closing this requires stronger trust signals that AI systems weight for position, not just inclusion."
+        )
+
+    actions.append(
+        f"Build or strengthen content explicitly covering: {', '.join(area.customer_language[:4])}. "
+        "These map directly to the prompt types AI systems use when answering recommendation queries."
+    )
+
     for signal in area.evidence_signals[:3]:
-        actions.append(f"Audit whether your firm has credible evidence for: {signal}.")
+        actions.append(f"Verify your firm has visible, third-party-confirmable evidence for: {signal}.")
+
+    actions.append(
+        "Make attorney credentials, bar admissions, and service areas easy for AI crawlers to parse — "
+        "structured data (LegalService, LocalBusiness schema) accelerates this."
+    )
+
     return actions
