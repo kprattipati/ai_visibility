@@ -109,9 +109,6 @@ def _priority_actions(
         "These map directly to the prompt types AI systems use when answering recommendation queries."
     )
 
-    for signal in area.evidence_signals[:3]:
-        actions.append(f"Verify your firm has visible, third-party-confirmable evidence for: {signal}.")
-
     actions.append(
         "Make attorney credentials, bar admissions, and service areas easy for AI crawlers to parse — "
         "structured data (LegalService, LocalBusiness schema) accelerates this."
