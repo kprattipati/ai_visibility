@@ -56,6 +56,20 @@ def main() -> None:
     monthly_parser.add_argument("--config", default="config/providers.json")
     add_geo_arguments(monthly_parser, default_scope="sample")
 
+    batch_parser = subparsers.add_parser(
+        "batch-snapshot",
+        help="Generate a cold-email snapshot report for every seeded firm in a market (shares cached answers).",
+    )
+    batch_parser.add_argument("--db", default="data/visibility.db")
+    batch_parser.add_argument("--city", required=True)
+    batch_parser.add_argument("--practice-area", required=True)
+    batch_parser.add_argument("--limit", type=int, default=12, help="Prompts per snapshot (10-15 for cold email).")
+    batch_parser.add_argument("--out-dir", default="reports/batch")
+    batch_parser.add_argument("--force-refresh", action="store_true")
+    batch_parser.add_argument("--engine", default=None)
+    batch_parser.add_argument("--config", default="config/providers.json")
+    add_geo_arguments(batch_parser)
+
     check_parser = subparsers.add_parser("customer-check", help="Run a smaller cached customer visibility check.")
     check_parser.add_argument("--db", default="data/visibility.db")
     check_parser.add_argument("--city", required=True)
@@ -85,6 +99,8 @@ def main() -> None:
             run_audit(args)
         elif args.command == "monthly-index":
             run_stored_audit(args, run_type="monthly-index", default_use_cache=True)
+        elif args.command == "batch-snapshot":
+            run_batch_snapshot(args)
         elif args.command == "customer-check":
             run_stored_audit(args, run_type="customer-check", default_use_cache=True)
     except (ValueError, NotImplementedError, RuntimeError) as exc:
@@ -188,6 +204,64 @@ def run_stored_audit(args: argparse.Namespace, run_type: str, default_use_cache:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(report, encoding="utf-8")
     print(f"Wrote {out_path}")
+
+
+def run_batch_snapshot(args: argparse.Namespace) -> None:
+    city = get_city(args.city)
+    area = get_practice_area(args.practice_area)
+    geo_scopes = scopes_for(city, args.geo_scope, args.neighborhood, args.zip_code)
+    prompts = generate_prompts(city, area, args.limit, geo_scopes)
+
+    # Use a placeholder target to load the full seeded competitor list.
+    all_businesses = sample_businesses(city.name, area.slug, "__batch__")
+    # Drop the synthetic placeholder we inserted (not a real firm).
+    businesses = [b for b in all_businesses if b.name != "__batch__"]
+
+    if not businesses:
+        raise ValueError(f"No seeded competitors found for {city.name} / {area.slug}.")
+
+    # Run prompts once against the full competitor set and cache results.
+    store = VisibilityStore(args.db)
+    engine = build_engine_client(args.engine, args.config)
+    candidate_signature = _candidate_signature(businesses)
+    try:
+        store.init_schema()
+        market_id = store.get_or_create_market(city, area)
+        store.upsert_businesses(market_id, businesses)
+        prompt_ids = store.upsert_prompts(market_id, prompts)
+
+        answers: list[EngineAnswer] = []
+        cache_hits = 0
+        fresh_runs = 0
+        for prompt in prompts:
+            prompt_id = prompt_ids[prompt]
+            answer = None if args.force_refresh else store.cached_answer(
+                prompt_id, engine.name, candidate_signature
+            )
+            if answer is None:
+                answer = engine.ask(prompt, businesses)
+                store.save_answer(market_id, prompt_id, answer, candidate_signature)
+                fresh_runs += 1
+            else:
+                cache_hits += 1
+            answers.append(answer)
+        print(f"{cache_hits} cached answers, {fresh_runs} fresh answers for {len(prompts)} prompts.")
+
+        scores = score_answers(businesses, answers)
+        out_dir = Path(args.out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        slug = f"{city.name.lower().replace(' ', '-')}-{area.slug.replace(' ', '-')}"
+
+        for business in businesses:
+            report = build_markdown_report(city, area, business.name, answers, scores)
+            filename = business.name.lower().replace(" ", "-").replace(",", "").replace(".", "") + f"-{slug}.md"
+            out_path = out_dir / filename
+            out_path.write_text(report, encoding="utf-8")
+            target_score = next(s for s in scores if s.business.name == business.name)
+            rank = scores.index(target_score) + 1
+            print(f"  [{rank}/{len(businesses)}] {business.name} → {out_path}")
+    finally:
+        store.close()
 
 
 def _run_with_storage(

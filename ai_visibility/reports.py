@@ -38,20 +38,19 @@ def build_markdown_report(
         "",
         "## Leaderboard",
         "",
-        "| Rank | Business | Score | Mentions | Recommendations | Top-3 Mentions | Citations |",
-        "|---:|---|---:|---:|---:|---:|---:|",
+        "| Rank | Business | Score | Mentions | Recommendations | Top-3 Mentions |",
+        "|---:|---|---:|---:|---:|---:|",
     ]
 
     for rank, score in enumerate(scores, start=1):
         lines.append(
-            "| {rank} | {business} | {score} | {mentions} | {recommendations} | {top_three} | {citations} |".format(
+            "| {rank} | {business} | {score} | {mentions} | {recommendations} | {top_three} |".format(
                 rank=rank,
                 business=score.business.name,
                 score=score.visibility_score(total_prompts),
                 mentions=score.mentions,
                 recommendations=score.recommendations,
                 top_three=score.top_three_mentions,
-                citations=len(score.citations),
             )
         )
 
