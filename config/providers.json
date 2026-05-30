@@ -1,0 +1,33 @@
+{
+  "default_engine": "mock",
+  "engines": {
+    "mock": {
+      "provider": "mock",
+      "enabled": true
+    },
+    "openai": {
+      "provider": "openai",
+      "enabled": true,
+      "api_key_env": "OPENAI_API_KEY",
+      "model": "gpt-5.4-mini"
+    },
+    "perplexity": {
+      "provider": "perplexity",
+      "enabled": false,
+      "api_key_env": "PERPLEXITY_API_KEY",
+      "model": "sonar"
+    },
+    "claude": {
+      "provider": "anthropic",
+      "enabled": false,
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "model": "claude-placeholder"
+    },
+    "gemini": {
+      "provider": "gemini",
+      "enabled": false,
+      "api_key_env": "GEMINI_API_KEY",
+      "model": "gemini-placeholder"
+    }
+  }
+}
