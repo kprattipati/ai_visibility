@@ -17,6 +17,19 @@ PROMPT_TEMPLATES: tuple[str, ...] = (
     "Which local {practice} law firms in {city} are commonly recommended?",
 )
 
+ITINERARY_PROMPT_TEMPLATES: tuple[str, ...] = (
+    "I'm in {city} for the day. Plan my itinerary.",
+    "I'm visiting {city} for the first time. What should I do?",
+    "I'm in {city} for the weekend. What are the must-see attractions?",
+    "Plan a one-day itinerary for {city}.",
+    "What are the top things to do in {city}?",
+    "I have 3 days in {city}. Give me a full itinerary.",
+    "What are the best tourist attractions in {city}?",
+    "I'm in {city} with kids. What should we do?",
+    "What should I not miss on a trip to {city}?",
+    "Give me a 2-day itinerary for {city} covering the highlights.",
+)
+
 
 def generate_prompts(
     city: City,
@@ -26,6 +39,13 @@ def generate_prompts(
 ) -> list[str]:
     prompts: list[str] = []
     scopes = geo_scopes or [city_scope(city)]
+
+    if area.slug == "itinerary":
+        for scope in scopes:
+            for template in ITINERARY_PROMPT_TEMPLATES:
+                prompts.append(template.format(city=scope.query_text))
+        return prompts[:limit] if limit else prompts
+
     for scope in scopes:
         for template in PROMPT_TEMPLATES:
             if "{need}" in template:

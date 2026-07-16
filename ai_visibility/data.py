@@ -24,6 +24,13 @@ TOP_CITIES: tuple[City, ...] = (
     City("Chicago", "IL", 2_731_585),
     City("Houston", "TX", 2_397_315),
     City("Phoenix", "AZ", 1_665_481),
+    City("Las Vegas", "NV", 671_705),
+    City("Orlando", "FL", 320_742),
+    City("San Francisco", "CA", 815_201),
+    City("Miami", "FL", 470_914),
+    City("Washington", "DC", 689_545),
+    City("New Orleans", "LA", 364_136),
+    City("Nashville", "TN", 715_884),
 )
 
 
@@ -87,6 +94,26 @@ PRACTICE_AREAS: tuple[PracticeArea, ...] = (
             "pages for visa, green card, asylum, and citizenship",
             "attorney bios with immigration specialization",
             "clear appointment and document-prep guidance",
+        ),
+    ),
+    PracticeArea(
+        slug="itinerary",
+        label="Travel Attractions & Itinerary",
+        customer_language=(
+            "things to do",
+            "day trip",
+            "must-see",
+            "weekend visit",
+            "tourist spots",
+            "hidden gems",
+        ),
+        evidence_signals=(
+            "Google Maps listing with photos and reviews",
+            "TripAdvisor or Yelp profile",
+            "official website with hours and admission",
+            "featured in travel guides or listicles",
+            "strong volume of visitor photos and ratings",
+            "accessible location and transit information",
         ),
     ),
 )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -254,14 +255,54 @@ def run_batch_snapshot(args: argparse.Namespace) -> None:
 
         for business in businesses:
             report = build_markdown_report(city, area, business.name, answers, scores)
-            filename = business.name.lower().replace(" ", "-").replace(",", "").replace(".", "") + f"-{slug}.md"
+            import re as _re
+            filename = _re.sub(r"[^a-z0-9]+", "-", business.name.lower()).strip("-") + f"-{slug}.md"
             out_path = out_dir / filename
             out_path.write_text(report, encoding="utf-8")
             target_score = next(s for s in scores if s.business.name == business.name)
             rank = scores.index(target_score) + 1
             print(f"  [{rank}/{len(businesses)}] {business.name} → {out_path}")
+
+        json_path = out_dir / f"{slug}.json"
+        _export_leaderboard_json(json_path, city, area, scores, answers)
+        print(f"  Leaderboard → {json_path}")
     finally:
         store.close()
+
+
+def _export_leaderboard_json(
+    path: Path,
+    city,
+    area,
+    scores: list,
+    answers: list[EngineAnswer],
+) -> None:
+    from datetime import date
+    total_prompts = len(answers)
+    engines = sorted({a.engine for a in answers})
+    data = {
+        "city": city.name,
+        "state": city.state,
+        "practice_area": area.label,
+        "slug": area.slug,
+        "generated": date.today().isoformat(),
+        "prompts_tested": total_prompts,
+        "engines": engines,
+        "firms": [
+            {
+                "rank": rank,
+                "name": score.business.name,
+                "website": score.business.website,
+                "score": score.visibility_score(total_prompts),
+                "mentions": score.mentions,
+                "recommendations": score.recommendations,
+                "top_three_mentions": score.top_three_mentions,
+                "reasons": list(dict.fromkeys(score.reasons))[:3],
+            }
+            for rank, score in enumerate(scores, start=1)
+        ],
+    }
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 def _run_with_storage(

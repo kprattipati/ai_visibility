@@ -55,11 +55,39 @@ def build_markdown_report(
             )
         )
 
-    lines.extend(["", "## Priority Actions", ""])
+    top_reasons = _deduplicated_reasons(top, limit=3)
+    if top_reasons and top.business.name != target_business:
+        lines.extend([
+            "",
+            f"## What's Driving the Gap",
+            "",
+            f"The AI cited these signals when recommending {top.business.name} over your firm:",
+            "",
+        ])
+        for reason in top_reasons:
+            lines.append(f'> "{reason}"')
+        lines.extend(["", "To close this gap:"])
+    else:
+        lines.extend(["", "## Priority Actions"])
+
+    lines.append("")
     for action in _priority_actions(area, target, top, rank, total_firms, total_prompts):
         lines.append(f"- {action}")
 
     return "\n".join(lines) + "\n"
+
+
+def _deduplicated_reasons(score: BusinessScore, limit: int) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for reason in score.reasons:
+        normalized = reason.lower().strip()
+        if normalized not in seen:
+            seen.add(normalized)
+            result.append(reason)
+        if len(result) >= limit:
+            break
+    return result
 
 
 def _priority_actions(
@@ -110,8 +138,8 @@ def _priority_actions(
     )
 
     actions.append(
-        "Make attorney credentials, bar admissions, and service areas easy for AI crawlers to parse — "
-        "structured data (LegalService, LocalBusiness schema) accelerates this."
+        "Make it easy for AI systems to verify the basics: attorney credentials, practice focus, "
+        "office location, and how to get a consultation. Firms that are hard to verify get skipped."
     )
 
     return actions
